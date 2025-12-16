@@ -105,7 +105,7 @@ class NpdClient:
             self.token = token
             self.refresh_token = response.get(
                 "refreshToken"
-            )  # Изменено с refresh_token на refreshToken
+            )
             self.headers["Authorization"] = f"Bearer {token}"
             if self.session and not self.session.closed:
                 self.session.headers.update({"Authorization": f"Bearer {token}"})
@@ -125,12 +125,12 @@ class NpdClient:
         """
         Метод для получения чеков в истории за определенный период
 
-        :param from_date:
-        :param to_date:
-        :param offset:
-        :param limit:
-        :param sort_by:
-        :return:
+        :param from_date: Дата с которой будет браться информация о чеках
+        :param to_date: Дата по которой будет браться информация о чеках
+        :param offset: Смещение для пагинации
+        :param limit: Количество записей на страницу
+        :param sort_by: Сортировка записей по определенному параметру
+        :return: OperationResponse - модель с информацией о чеках
         """
         params = {
             "from_date": from_date.isoformat() if from_date else None,
