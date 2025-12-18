@@ -61,3 +61,47 @@ class OperationResponse(BaseModel):
     has_more: bool
     current_offset: int
     current_limit: int
+
+
+class Income(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=lambda x: "".join(
+            word.capitalize() if i else word for i, word in enumerate(x.split("_"))
+        ),
+    )
+
+    approved_receipt_uuid: str
+
+
+class CancellationInfo(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=lambda x: "".join(
+            word.capitalize() if i else word for i, word in enumerate(x.split("_"))
+        ),
+    )
+
+    operation_time: str
+    register_time: str
+    tax_period_id: int
+    comment: str
+
+
+class IncomeInfo(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=lambda x: "".join(
+            word.capitalize() if i else word for i, word in enumerate(x.split("_"))
+        ),
+    )
+
+    approved_receipt_uuid: str
+    name: str
+    operation_time: str
+    request_time: str
+    payment_type: str
+    partner_code: str | None = None
+    total_amount: float
+    cancellation_info: CancellationInfo | None = None
+    source_device_id: str

@@ -15,3 +15,12 @@ class SortBy(enum.Enum):
     operation_time_desc = "operation_time:desc"
     total_amount_asc = "total_amount:asc"
     total_amount_desc = "total_amount:desc"
+
+
+class CommentReturn(enum.Enum):
+    """
+    Типы возвратов с комментарием
+    """
+
+    wrong_receipt = "Чек сформирован ошибочно"
+    receipt_return = "Чек возвращен"

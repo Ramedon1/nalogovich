@@ -5,8 +5,8 @@ import aiohttp
 from typing import Any
 from dateutil.relativedelta import relativedelta
 
-from nalogovich.enums import SortBy
-from nalogovich.models.operations import OperationResponse
+from nalogovich.enums import SortBy, CommentReturn
+from nalogovich.models.operations import OperationResponse, Income, IncomeInfo
 
 
 class NpdClient:
@@ -71,7 +71,7 @@ class NpdClient:
                 return await self.request(method, endpoint, **kwargs)
             raise
 
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             raise
 
     async def auth(self):
@@ -103,9 +103,7 @@ class NpdClient:
 
         if token := response.get("token"):
             self.token = token
-            self.refresh_token = response.get(
-                "refreshToken"
-            )
+            self.refresh_token = response.get("refreshToken")
             self.headers["Authorization"] = f"Bearer {token}"
             if self.session and not self.session.closed:
                 self.session.headers.update({"Authorization": f"Bearer {token}"})
@@ -124,6 +122,7 @@ class NpdClient:
     ) -> OperationResponse:
         """
         Метод для получения чеков в истории за определенный период
+        API Endpoint: https://lknpd.nalog.ru/api/v1/incomes
 
         :param from_date: Дата с которой будет браться информация о чеках
         :param to_date: Дата по которой будет браться информация о чеках
@@ -139,6 +138,87 @@ class NpdClient:
             "limit": limit,
             "sort_by": sort_by.value if sort_by else None,
         }
-        response = await self.request("GET", "incomes", params=params)
 
+        response = await self.request("GET", "incomes", params=params)
         return OperationResponse.model_validate(response)
+
+    async def create_check(
+        self,
+        name: str,
+        amount: float,
+        is_foreign_organization: bool = False,
+        inn_of_organization: str | None = None,
+        name_of_organization: str | None = None,
+        date_of_sale: datetime.datetime | None = None,
+        is_business: bool = False,
+    ) -> Income:
+        """
+        Метод для создания чека (регистрации дохода)
+        API Endpoint: https://lknpd.nalog.ru/api/v1/income
+        :param name: Название услуги или товара
+        :param amount: Сумма услуги или товара
+        :param is_foreign_organization: Является ли организация иностранной
+        :param inn_of_organization: ИНН организации (если бизнес)
+        :param name_of_organization: Название организации (если иностранная организация или бизнес)
+        :param date_of_sale: Дата продажи (если не указана, будет использовано текущее время)
+        :param is_business: Является ли клиент бизнесом
+
+        :return: Income - модель с информацией о созданном чеке
+        """
+
+        dt = date_of_sale if date_of_sale else datetime.datetime.now().astimezone()
+        formatted_time = dt.isoformat()
+
+        client = {}
+
+        if is_foreign_organization:
+            client["incomeType"] = "FROM_FOREIGN_AGENCY"
+            client["displayName"] = name_of_organization
+        elif is_business:
+            client["incomeType"] = "FROM_LEGAL_ENTITY"
+            client["inn"] = inn_of_organization
+            client["displayName"] = name_of_organization
+        else:
+            client["incomeType"] = "FROM_INDIVIDUAL"
+            client["displayName"] = None
+            client["inn"] = None
+            client["contactPhone"] = None
+
+        payload = {
+            "operationTime": formatted_time,
+            "requestTime": datetime.datetime.now().astimezone().isoformat(),
+            "services": [{"name": name, "amount": amount, "quantity": 1}],
+            "totalAmount": str(amount),
+            "client": client,
+            "paymentType": "CASH",  # Valid values: "CASH" (Cash/Card) or "ACCOUNT" (Transfer)
+            "ignoreMaxTotalIncomeRestriction": False,
+        }
+
+        response = await self.request("POST", "income", json=payload)
+        return Income.model_validate(response)
+
+    async def cancel_check(
+        self,
+        receipt_uuid: str,
+        comment: CommentReturn | str = CommentReturn.wrong_receipt,
+    ) -> IncomeInfo:
+        """
+        Метод для аннулирования чека.
+        API Endpoint: https://lknpd.nalog.ru/api/v1/cancel
+
+        :param receipt_uuid: Уникальный идентификатор чека (например, "200bzznrt0").
+        :param comment: Причина аннулирования.
+        """
+
+        now = datetime.datetime.now().astimezone()
+        formatted_time = now.isoformat()
+
+        payload = {
+            "operationTime": formatted_time,
+            "requestTime": formatted_time,
+            "comment": comment.value if isinstance(comment, CommentReturn) else comment,
+            "receiptUuid": receipt_uuid,
+        }
+
+        response = await self.request("POST", "cancel", json=payload)
+        return IncomeInfo.model_validate(response.get("incomeInfo", response))
