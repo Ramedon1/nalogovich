@@ -5,8 +5,15 @@ import aiohttp
 from typing import Any
 from dateutil.relativedelta import relativedelta
 
-from nalogovich.enums import SortBy, CommentReturn
-from nalogovich.models.operations import OperationResponse, Income, IncomeInfo
+from src.nalogovich.enums import PaymentType, SortBy, CommentReturn
+from src.nalogovich.exeptions import ValidationError
+from src.nalogovich.models.operations import (
+    ServiceCheck,
+    OperationResponse,
+    Income,
+    IncomeInfo,
+)
+from src.nalogovich.utils.checks import prepare_client_payload
 
 
 class NpdClient:
@@ -144,54 +151,65 @@ class NpdClient:
 
     async def create_check(
         self,
-        name: str,
-        amount: float,
+        name: str | None = None,
+        amount: float | None = None,
+        services: list[ServiceCheck] | None = None,
+        is_business: bool = False,
         is_foreign_organization: bool = False,
         inn_of_organization: str | None = None,
         name_of_organization: str | None = None,
         date_of_sale: datetime.datetime | None = None,
-        is_business: bool = False,
+        payment_type: PaymentType = PaymentType.CASH,
+        ignore_max_total_income_restriction: bool = False,
     ) -> Income:
         """
-        Метод для создания чека (регистрации дохода)
-        API Endpoint: https://lknpd.nalog.ru/api/v1/income
-        :param name: Название услуги или товара
-        :param amount: Сумма услуги или товара
-        :param is_foreign_organization: Является ли организация иностранной
-        :param inn_of_organization: ИНН организации (если бизнес)
-        :param name_of_organization: Название организации (если иностранная организация или бизнес)
-        :param date_of_sale: Дата продажи (если не указана, будет использовано текущее время)
-        :param is_business: Является ли клиент бизнесом
+        Регистрация дохода. Поддерживает одну или несколько позиций.
 
-        :return: Income - модель с информацией о созданном чеке
+        :param name: Название (если одна позиция)
+        :param amount: Сумма (если одна позиция)
+        :param services: Список объектов ServiceCheck (если позиций несколько)
+        :param is_business: Является ли организация бизнесом
+        :param is_foreign_organization: Является ли организация иностранной
+        :param inn_of_organization: ИНН организации
+        :param name_of_organization: Название организации
+        :param date_of_sale: Дата и время продажи
+        :param payment_type: Тип оплаты
+        :param ignore_max_total_income_restriction: Игнорировать ограничение по максимальному годовому доходу
+
+        :return: Income - модель с информацией о зарегистрированном доходе
         """
 
-        dt = date_of_sale if date_of_sale else datetime.datetime.now().astimezone()
-        formatted_time = dt.isoformat()
+        final_services: list[ServiceCheck] = []
 
-        client = {}
-
-        if is_foreign_organization:
-            client["incomeType"] = "FROM_FOREIGN_AGENCY"
-            client["displayName"] = name_of_organization
-        elif is_business:
-            client["incomeType"] = "FROM_LEGAL_ENTITY"
-            client["inn"] = inn_of_organization
-            client["displayName"] = name_of_organization
+        if services:
+            final_services = services
+        elif name and amount is not None:
+            final_services = [ServiceCheck(name=name, amount=amount, quantity=1)]
         else:
-            client["incomeType"] = "FROM_INDIVIDUAL"
-            client["displayName"] = None
-            client["inn"] = None
-            client["contactPhone"] = None
+            raise ValidationError(
+                "Необходимо указать либо (name и amount), либо список services"
+            )
+
+        total_sum = sum(s.amount * s.quantity for s in final_services)
+
+        client_payload = prepare_client_payload(
+            is_business,
+            is_foreign_organization,
+            inn_of_organization,
+            name_of_organization,
+        )
+
+        now = datetime.datetime.now().astimezone()
+        sale_time = date_of_sale.astimezone() if date_of_sale else now
 
         payload = {
-            "operationTime": formatted_time,
-            "requestTime": datetime.datetime.now().astimezone().isoformat(),
-            "services": [{"name": name, "amount": amount, "quantity": 1}],
-            "totalAmount": str(amount),
-            "client": client,
-            "paymentType": "CASH",  # Valid values: "CASH" (Cash/Card) or "ACCOUNT" (Transfer)
-            "ignoreMaxTotalIncomeRestriction": False,
+            "operationTime": sale_time.isoformat(),
+            "requestTime": now.isoformat(),
+            "services": [s.model_dump(by_alias=True) for s in final_services],
+            "totalAmount": str(round(total_sum, 2)),
+            "client": client_payload,
+            "paymentType": payment_type.value,
+            "ignoreMaxTotalIncomeRestriction": ignore_max_total_income_restriction,
         }
 
         response = await self.request("POST", "income", json=payload)

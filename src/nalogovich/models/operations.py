@@ -3,6 +3,19 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 
+class ServiceCheck(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=lambda x: "".join(
+            word.capitalize() if i else word for i, word in enumerate(x.split("_"))
+        ),
+    )
+
+    name: str
+    quantity: int
+    amount: float
+
+
 class Service(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
