@@ -548,3 +548,93 @@ class NpdClient:
             return [PaymentTypeInfo.model_validate(item) for item in response]
         return []
 
+    async def update_bill_payment_info(
+        self,
+        invoice_id: int,
+        payment_type: InvoicePaymentType,
+        phone: str | None = None,
+        bank_name: str | None = None,
+        bank_bik: str | None = None,
+        corr_account: str | None = None,
+        current_account: str | None = None,
+    ) -> Invoice:
+        """
+        Изменение способа оплаты счёта.
+        API Endpoint: https://lknpd.nalog.ru/api/v1/invoice/update-payment-info
+
+        :param invoice_id: ID счёта
+        :param payment_type: Тип оплаты (PHONE - СБП, ACCOUNT - на банковский счет)
+        :param phone: Номер телефона для получения оплаты (для СБП)
+        :param bank_name: Название банка
+        :param bank_bik: БИК банка (для оплаты на счет)
+        :param corr_account: Корреспондентский счет банка (для оплаты на счет)
+        :param current_account: Расчетный счет (для оплаты на счет)
+
+        :return: Invoice - модель с обновлённой информацией о счёте
+        """
+        if payment_type == InvoicePaymentType.PHONE:
+            if not phone or not bank_name:
+                raise ValidationError(
+                    "Для оплаты по СБП (PHONE) необходимо указать phone и bank_name"
+                )
+        elif payment_type == InvoicePaymentType.ACCOUNT:
+            if not all([bank_name, bank_bik, corr_account, current_account]):
+                raise ValidationError(
+                    "Для оплаты на счёт (ACCOUNT) необходимо указать bank_name, bank_bik, corr_account и current_account"
+                )
+
+        payload: dict[str, Any] = {
+            "invoiceId": invoice_id,
+            "paymentType": payment_type.value,
+        }
+
+        if bank_name:
+            payload["bankName"] = bank_name
+        if phone:
+            payload["phone"] = phone
+        if bank_bik:
+            payload["bankBik"] = bank_bik
+        if corr_account:
+            payload["corrAccount"] = corr_account
+        if current_account:
+            payload["currentAccount"] = current_account
+
+        response = await self.request("POST", "invoice/update-payment-info", json=payload)
+        return Invoice.model_validate(response)
+
+    async def approve_bill(self, invoice_id: int) -> Invoice:
+        """
+        Пометить счёт как оплаченный.
+        API Endpoint: https://lknpd.nalog.ru/api/v1/invoice/{invoice_id}/approve
+
+        :param invoice_id: ID счёта
+
+        :return: Invoice - модель с информацией об оплаченном счёте
+        """
+        response = await self.request("POST", f"invoice/{invoice_id}/approve")
+        return Invoice.model_validate(response)
+
+    async def create_check_from_bill(
+        self,
+        invoice_id: int,
+        operation_time: datetime.datetime | None = None,
+    ) -> Invoice:
+        """
+        Создать чек на основе оплаченного счёта.
+        API Endpoint: https://lknpd.nalog.ru/api/v1/invoice/{invoice_id}/approve
+
+        :param invoice_id: ID счёта
+        :param operation_time: Дата и время получения средств (если не указано - текущее время)
+
+        :return: Invoice - модель с информацией о счёте с чеком
+        """
+        if operation_time is None:
+            operation_time = datetime.datetime.now().astimezone()
+
+        payload = {
+            "operationTime": operation_time.isoformat(),
+        }
+
+        response = await self.request("POST", f"invoice/{invoice_id}/approve", json=payload)
+        return Invoice.model_validate(response)
+
