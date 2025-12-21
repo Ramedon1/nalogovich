@@ -37,6 +37,56 @@ class PaymentType(str, enum.Enum):
     ACCOUNT = "ACCOUNT"
 
 
+class InvoiceStatus(str, enum.Enum):
+    """
+    Статусы счетов
+
+    CREATED: Создан
+    PAID: Оплачен
+    TO_PAYMENT: К оплате
+    FUND_RECEIVED: Средства получены
+    PAID_WITH_RECEIPT: Оплачен с чеком
+    PAID_WITHOUT_RECEIPT: Оплачен без чека
+    CANCELLED: Аннулирован
+    ERROR: Ошибка
+    ALL: Все статусы (для фильтрации)
+    """
+
+    CREATED = "CREATED"
+    PAID = "PAID"
+    TO_PAYMENT = "TO_PAYMENT"
+    FUND_RECEIVED = "FUND_RECEIVED"
+    PAID_WITH_RECEIPT = "PAID_WITH_RECEIPT"
+    PAID_WITHOUT_RECEIPT = "PAID_WITHOUT_RECEIPT"
+    CANCELLED = "CANCELLED"
+    ERROR = "ERROR"
+    ALL = "ALL"
+
+
+class InvoicePaymentType(str, enum.Enum):
+    """
+    Типы оплаты для счёта
+    PHONE: Оплата по номеру телефона (СБП)
+    ACCOUNT: Оплата на расчетный счет
+    """
+
+    PHONE = "PHONE"
+    ACCOUNT = "ACCOUNT"
+
+
+class InvoiceClientType(str, enum.Enum):
+    """
+    Типы клиентов для счёта
+    FROM_INDIVIDUAL: От физического лица
+    FROM_LEGAL_ENTITY: От юридического лица или ИП
+    FROM_FOREIGN_AGENCY: От иностранной организации
+    """
+
+    FROM_INDIVIDUAL = "FROM_INDIVIDUAL"
+    FROM_LEGAL_ENTITY = "FROM_LEGAL_ENTITY"
+    FROM_FOREIGN_AGENCY = "FROM_FOREIGN_AGENCY"
+
+
 class IncomeType(str, enum.Enum):
     """
     Типы клиентов для доходов
@@ -48,3 +98,29 @@ class IncomeType(str, enum.Enum):
     FROM_INDIVIDUAL = "FROM_INDIVIDUAL"
     FROM_LEGAL_ENTITY = "FROM_LEGAL_ENTITY"
     FROM_FOREIGN_AGENCY = "FROM_FOREIGN_AGENCY"
+
+
+class ReceiptType(str, enum.Enum):
+    """
+    Типы чеков при фильтрации
+
+    REGISTERED: Действителен чек
+    CANCELLED: Аннулирован чек
+    """
+
+    REGISTERED = "REGISTERED"
+    CANCELLED = "CANCELLED"
+
+
+class BuyerType(str, enum.Enum):
+    """
+    Тип покупателя
+
+    PERSON - Физ.лицо
+    COMPANY - Юр.лицо
+    FOREIGN_AGENCY - Иностранная организация
+    """
+
+    PERSON = "PERSON"
+    COMPANY = "COMPANY"
+    FOREIGN_AGENCY = "FOREIGN_AGENCY"
