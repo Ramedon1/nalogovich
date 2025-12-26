@@ -80,7 +80,6 @@ plugins:
       handlers:
         python:
           paths: [src]
-          import_dirs: [src]
           options:
             docstring_style: sphinx
             docstring_section_style: list
