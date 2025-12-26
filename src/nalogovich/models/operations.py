@@ -191,6 +191,7 @@ class InvoiceResponse(BaseModel):
 
 class PaymentTypeInfo(BaseModel):
     """Реквизиты для получения оплаты"""
+
     model_config = ConfigDict(
         populate_by_name=True,
         alias_generator=lambda x: "".join(
@@ -206,5 +207,3 @@ class PaymentTypeInfo(BaseModel):
     current_account: str | None = None
     phone: str | None = None
     is_default: bool | None = None
-
-

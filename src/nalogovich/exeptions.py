@@ -29,4 +29,3 @@ class AuthenticationError(NPDError):
         super().__init__(message)
         self.status_code = status_code
         self.response_data = response_data
-

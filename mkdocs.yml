@@ -1,0 +1,123 @@
+site_name: Nalogovich
+site_description: Асинхронная Python библиотека для работы с API "Мой Налог" (ЛК НПД) (lknpd.nalog.ru)
+site_url: https://nalogovich.readthedocs.io/
+repo_url: https://github.com/Ramedon1/nalogovich
+repo_name: Ramedon1/nalogovich
+
+theme:
+  name: material
+  palette:
+    # Темная тема
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: white
+      toggle:
+        icon: material/brightness-4
+        name: Переключить на светлую тему
+    # Светлая тема
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: black
+      toggle:
+        icon: material/brightness-7
+        name: Переключить на темную тему
+  
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+
+  icon:
+    repo: fontawesome/brands/github
+  
+  logo: assets/icon.svg
+  favicon: assets/icon.svg
+
+  language: ru
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      permalink_title: Скопировать ссылку на этот раздел
+      toc_depth: 3
+
+plugins:
+  - search:
+      lang: ru
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          import_dirs: [src]
+          options:
+            docstring_style: sphinx
+            docstring_section_style: list
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            heading_level: 2
+            show_signature_annotations: true
+            separate_signature: true
+            line_length: 80
+            show_if_no_docstring: false
+            merge_init_into_class: true
+            members_order: source
+            group_by_category: true
+            show_category_heading: true
+            show_labels: true
+            annotations_path: brief
+            signature_crossrefs: true
+
+nav:
+  - Введение: index.md
+
+  - Начало работы:
+    - Установка: guide/installation.md
+    - Получение пароля для входа в lknpd.nalog.ru: guide/password.md
+    - Первые шаги: guide/quickstart.md
+
+  - Руководства:
+    - Авторизация: guide/authentication.md
+    - Работа с чеками: guide/checks.md
+    - Работа со счетами: guide/invoices.md
+
+  - Техническая документация API:
+    - Клиент: api/client.md
+    - Модели данных: api/models.md
+    - Перечисления: api/enums.md
+    - Исключения: api/exceptions.md
+

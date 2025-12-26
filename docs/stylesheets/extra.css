@@ -1,0 +1,108 @@
+:root {
+    --md-primary-fg-color: #000000;
+    --md-primary-fg-color--light: #333333;
+    --md-primary-fg-color--dark: #000000;
+    --md-accent-fg-color: #000000;
+    --md-accent-fg-color--transparent: rgba(0, 0, 0, 0.1);
+}
+
+[data-md-color-scheme="slate"] {
+    --md-primary-fg-color: #ffffff;
+    --md-primary-fg-color--light: #cccccc;
+    --md-primary-fg-color--dark: #ffffff;
+    --md-accent-fg-color: #ffffff;
+    --md-accent-fg-color--transparent: rgba(255, 255, 255, 0.1);
+}
+
+.md-nav__link--active,
+.md-nav__link:hover {
+    color: #000000 !important;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link--active,
+[data-md-color-scheme="slate"] .md-nav__link:hover {
+    color: #ffffff !important;
+}
+
+.md-nav__link--active::before {
+    background-color: #000000 !important;
+}
+
+[data-md-color-scheme="slate"] .md-nav__link--active::before {
+    background-color: #ffffff !important;
+}
+
+.headerlink {
+    display: inline-block;
+    margin-left: 0.5em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    color: var(--md-default-fg-color--lighter);
+    text-decoration: none;
+}
+
+h1:hover .headerlink,
+h2:hover .headerlink,
+h3:hover .headerlink,
+h4:hover .headerlink,
+h5:hover .headerlink,
+h6:hover .headerlink {
+    opacity: 1;
+}
+
+.headerlink:hover {
+    color: var(--md-accent-fg-color);
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+:target {
+    scroll-margin-top: 80px;
+}
+
+a[href^="#nalogovich"] {
+    color: var(--md-typeset-a-color);
+    text-decoration: none;
+    font-family: var(--md-code-font-family);
+    background-color: var(--md-code-bg-color);
+    padding: 0.1em 0.4em;
+    border-radius: 0.2em;
+    font-size: 0.95em;
+    transition: all 0.2s;
+}
+
+a[href^="#nalogovich"]:hover {
+    background-color: var(--md-accent-fg-color--transparent);
+    color: var(--md-accent-fg-color);
+}
+
+.doc-label {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 600;
+    padding: 0.2em 0.5em;
+    margin-left: 0.5em;
+    vertical-align: middle;
+    text-transform: uppercase;
+}
+
+.doc-label-async {
+    background-color: transparent;
+    color: #666666;
+    border: none;
+}
+
+.doc-label-property {
+    background-color: #000000;
+    color: white;
+    border-radius: 0.2em;
+}
+
+[data-md-color-scheme="slate"] .doc-label-property {
+    background-color: #ffffff;
+    color: black;
+    border-radius: 0.2em;
+}
+
