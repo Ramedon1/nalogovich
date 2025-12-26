@@ -4,10 +4,11 @@
 [![PyPI version](https://img.shields.io/pypi/v/nalogovich.svg)](https://pypi.org/project/nalogovich/)
 [![Python versions](https://img.shields.io/pypi/pyversions/nalogovich.svg)](https://pypi.org/project/nalogovich/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CodeFactor](https://www.codefactor.io/repository/github/ramedon1/nalogovich/badge)](https://www.codefactor.io/repository/github/ramedon1/nalogovich)
 
 **Nalogovich** - библиотека для интеграции с сервисом "Мой Налог". Идеально подходит для автоматизации отчетности самозанятых, создания платежных ботов в Telegram или CRM-систем.
 
-[Документация](#) | [Сообщить об ошибке](https://github.com/Ramedon1/nalogovich/issues)
+[Документация](https://nalogovich.readthedocs.io/ru/latest/) | [Сообщить об ошибке](https://github.com/Ramedon1/nalogovich/issues)
 
 ---
 ## 📦 Установка
