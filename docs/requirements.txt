@@ -1,0 +1,4 @@
+mkdocs-material
+mkdocstrings[python]
+ruff>=0.1.0
+

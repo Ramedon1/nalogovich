@@ -1,7 +1,7 @@
 [project]
 name = "nalogovich"
 version = "1.0.0"
-description = "Add your description here"
+description = "Wrapper for integration with the 'Мой налог' API service"
 readme = "README.md"
 authors = [
     { name = "Ramedon", email = "info@ramed.one" }
