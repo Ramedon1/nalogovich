@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Tuple
+from typing import Any
 
 from dateutil.relativedelta import relativedelta
 
