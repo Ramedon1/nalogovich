@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.nalogovich.enums import IncomeType
 from src.nalogovich.exeptions import ValidationError
 

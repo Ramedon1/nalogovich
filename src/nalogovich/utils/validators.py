@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from src.nalogovich.enums import InvoicePaymentType, InvoiceClientType
 from src.nalogovich.exeptions import ValidationError
 
