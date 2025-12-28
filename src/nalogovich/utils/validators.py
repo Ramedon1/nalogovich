@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.nalogovich.enums import InvoicePaymentType, InvoiceClientType
-from src.nalogovich.exeptions import ValidationError
+from nalogovich.enums import InvoicePaymentType, InvoiceClientType
+from nalogovich.exeptions import ValidationError
 
 
 def validate_payment_type_params(

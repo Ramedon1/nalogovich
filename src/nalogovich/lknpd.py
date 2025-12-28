@@ -5,7 +5,7 @@ import aiohttp
 from typing import Any
 from dateutil.relativedelta import relativedelta
 
-from src.nalogovich.enums import (
+from nalogovich.enums import (
     PaymentType,
     SortBy,
     CommentReturn,
@@ -15,8 +15,8 @@ from src.nalogovich.enums import (
     InvoiceClientType,
     InvoiceStatus,
 )
-from src.nalogovich.exeptions import ValidationError, AuthenticationError, ApiError
-from src.nalogovich.models.operations import (
+from nalogovich.exeptions import ValidationError, AuthenticationError, ApiError
+from nalogovich.models.operations import (
     ServiceCheck,
     OperationResponse,
     Income,
@@ -25,9 +25,9 @@ from src.nalogovich.models.operations import (
     InvoiceResponse,
     PaymentTypeInfo,
 )
-from src.nalogovich.utils.checks import prepare_client_payload
-from src.nalogovich.utils.formatters import format_date_range, build_payload
-from src.nalogovich.utils.validators import (
+from nalogovich.utils.checks import prepare_client_payload
+from nalogovich.utils.formatters import format_date_range, build_payload
+from nalogovich.utils.validators import (
     validate_payment_type_params,
     validate_client_type_params,
 )

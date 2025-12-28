@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from src.nalogovich.enums import IncomeType
-from src.nalogovich.exeptions import ValidationError
+from nalogovich.enums import IncomeType
+from nalogovich.exeptions import ValidationError
 
 
 def prepare_client_payload(is_business, is_foreign, inn, name):
