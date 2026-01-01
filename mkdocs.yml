@@ -110,6 +110,7 @@ nav:
     - Первые шаги: guide/quickstart.md
 
   - Руководства:
+    - Логгирование: guide/logging.md
     - Авторизация: guide/authentication.md
     - Работа с чеками: guide/checks.md
     - Работа со счетами: guide/invoices.md

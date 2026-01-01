@@ -4,6 +4,7 @@ import datetime
 import aiohttp
 from typing import Any
 from dateutil.relativedelta import relativedelta
+from loguru import logger
 
 from nalogovich.enums import (
     PaymentType,
@@ -38,10 +39,12 @@ class NpdClient:
         self,
         inn: str,
         password: str,
+        enable_logging: bool = False,
     ):
         self.base_url = "https://lknpd.nalog.ru/api/v1/"
         self.inn = inn
         self.password = password
+        self.enable_logging = enable_logging
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             "Content-Type": "application/json",
@@ -57,6 +60,17 @@ class NpdClient:
         self.token: str | None = None
         self.refresh_token: str | None = None
         self.session: aiohttp.ClientSession | None = None
+
+        if self.enable_logging:
+            logger.enable("nalogovich")
+        else:
+            logger.disable("nalogovich")
+
+    def _log(self, level: str, message: str, **kwargs):
+        """Вспомогательный метод для логирования."""
+        if self.enable_logging:
+            log_func = getattr(logger.opt(depth=1), level)
+            log_func(f"[nalogovich] {message}", **kwargs)
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
@@ -105,6 +119,7 @@ class NpdClient:
         :raises AuthenticationError: При неверных учетных данных или других ошибках авторизации
         :raises ApiError: При других ошибках API
         """
+
         payload = {
             "username": self.inn,
             "password": self.password,
@@ -124,11 +139,13 @@ class NpdClient:
                     error_message = "Неверный ИНН или пароль"
                     if response_data:
                         error_message = response_data.get("message", error_message)
+                    self._log("error", f"Ошибка авторизации: {error_message}")
                     raise AuthenticationError(
                         error_message, status_code=422, response_data=response_data
                     )
 
                 if response.status == 401:
+                    self._log("error", "Ошибка авторизации: Неавторизован")
                     raise AuthenticationError(
                         "Неавторизован. Проверьте учетные данные.",
                         status_code=401,
@@ -136,6 +153,7 @@ class NpdClient:
                     )
 
                 if response.status == 403:
+                    self._log("error", "Ошибка авторизации: Доступ запрещен")
                     raise AuthenticationError(
                         "Доступ запрещен. Возможно, аккаунт заблокирован.",
                         status_code=403,
@@ -146,6 +164,7 @@ class NpdClient:
                     error_message = f"Ошибка авторизации: HTTP {response.status}"
                     if response_data and isinstance(response_data, dict):
                         error_message = response_data.get("message", error_message)
+                    self._log("error", error_message)
                     raise ApiError(
                         error_message,
                         status_code=response.status,
@@ -160,10 +179,12 @@ class NpdClient:
                         self.session.headers.update(
                             {"Authorization": f"Bearer {token}"}
                         )
+                    self._log("info", "Авторизация успешно завершена")
 
                 return response_data
 
         except aiohttp.ClientError as e:
+            self._log("error", f"Ошибка сети при авторизации: {e}")
             raise ApiError(f"Ошибка сети при авторизации: {e}", status_code=0)
 
     async def re_auth(self):
@@ -173,6 +194,8 @@ class NpdClient:
         :raises AuthenticationError: При невалидном refresh token
         :raises ApiError: При других ошибках API
         """
+        self._log("info", "Попытка обновления токена")
+
         if not self.refresh_token:
             return await self.auth()
 
@@ -198,6 +221,7 @@ class NpdClient:
                     error_message = f"Ошибка обновления токена: HTTP {response.status}"
                     if response_data and isinstance(response_data, dict):
                         error_message = response_data.get("message", error_message)
+                    self._log("error", error_message)
                     raise ApiError(
                         error_message,
                         status_code=response.status,
@@ -212,10 +236,12 @@ class NpdClient:
                         self.session.headers.update(
                             {"Authorization": f"Bearer {token}"}
                         )
+                    self._log("info", "Токен успешно обновлен")
 
                 return response_data
 
         except aiohttp.ClientError as e:
+            self._log("error", f"Ошибка сети при обновлении токена: {e}")
             raise ApiError(f"Ошибка сети при обновлении токена: {e}", status_code=0)
 
     async def get_checks(
@@ -244,6 +270,11 @@ class NpdClient:
 
         :return: OperationResponse - модель с информацией о чеках
         """
+        self._log(
+            "info",
+            f"Получение чеков за период с {from_date} по {to_date}, offset={offset}, limit={limit}",
+        )
+
         params = {
             "from_date": from_date.isoformat() if from_date else None,
             "to_date": to_date.isoformat() if to_date else None,
@@ -255,7 +286,9 @@ class NpdClient:
         }
 
         response = await self.request("GET", "incomes", params=params)
-        return OperationResponse.model_validate(response)
+        result = OperationResponse.model_validate(response)
+        self._log("info", f"Получено чеков: {len(result.items)} из {result.total}")
+        return result
 
     async def create_check(
         self,
@@ -321,7 +354,9 @@ class NpdClient:
         }
 
         response = await self.request("POST", "income", json=payload)
-        return Income.model_validate(response)
+        result = Income.model_validate(response)
+        self._log("info", f"Чек успешно создан, ID: {result.receipt_id}")
+        return result
 
     async def cancel_check(
         self,
@@ -347,7 +382,9 @@ class NpdClient:
         }
 
         response = await self.request("POST", "cancel", json=payload)
-        return IncomeInfo.model_validate(response.get("incomeInfo", response))
+        result = IncomeInfo.model_validate(response.get("incomeInfo", response))
+        self._log("info", f"Чек {receipt_uuid} успешно аннулирован")
+        return result
 
     async def create_bill(
         self,
@@ -442,7 +479,9 @@ class NpdClient:
         )
 
         response = await self.request("POST", "invoice", json=payload)
-        return Invoice.model_validate(response)
+        result = Invoice.model_validate(response)
+        self._log("info", f"Счёт успешно создан, ID: {result.id}")
+        return result
 
     async def cancel_bill(self, invoice_id: int) -> Invoice:
         """
@@ -454,7 +493,9 @@ class NpdClient:
         :return: Invoice - модель с информацией об аннулированном счёте
         """
         response = await self.request("POST", f"invoice/{invoice_id}/cancel")
-        return Invoice.model_validate(response)
+        result = Invoice.model_validate(response)
+        self._log("info", f"Счёт ID: {invoice_id} успешно аннулирован")
+        return result
 
     async def get_bills(
         self,
@@ -482,6 +523,7 @@ class NpdClient:
 
         :return: InvoiceResponse - список счетов с пагинацией
         """
+
         from_str, to_str = format_date_range(date_from, date_to)
 
         filtered = [
@@ -504,7 +546,9 @@ class NpdClient:
         }
 
         response = await self.request("POST", "invoice/table", json=payload)
-        return InvoiceResponse.model_validate(response)
+        result = InvoiceResponse.model_validate(response)
+        self._log("info", f"Получено счетов: {len(result.data)} из {result.total}")
+        return result
 
     async def get_payment_types(
         self,
@@ -523,7 +567,9 @@ class NpdClient:
         )
 
         if isinstance(response, list):
-            return [PaymentTypeInfo.model_validate(item) for item in response]
+            result = [PaymentTypeInfo.model_validate(item) for item in response]
+            self._log("info", f"Получено реквизитов: {len(result)}")
+            return result
         return []
 
     async def update_bill_payment_info(
@@ -550,6 +596,7 @@ class NpdClient:
 
         :return: Invoice - модель с обновлённой информацией о счёте
         """
+
         validate_payment_type_params(
             payment_type, phone, bank_name, bank_bik, corr_account, current_account
         )
@@ -569,7 +616,11 @@ class NpdClient:
         response = await self.request(
             "POST", "invoice/update-payment-info", json=payload
         )
-        return Invoice.model_validate(response)
+        result = Invoice.model_validate(response)
+        self._log(
+            "info", f"Платёжная информация для счёта ID: {invoice_id} успешно обновлена"
+        )
+        return result
 
     async def approve_bill(self, invoice_id: int) -> Invoice:
         """
@@ -581,7 +632,9 @@ class NpdClient:
         :return: Invoice - модель с информацией об оплаченном счёте
         """
         response = await self.request("POST", f"invoice/{invoice_id}/approve")
-        return Invoice.model_validate(response)
+        result = Invoice.model_validate(response)
+        self._log("info", f"Счёт ID: {invoice_id} успешно отмечен как оплаченный")
+        return result
 
     async def create_check_from_bill(
         self,
@@ -597,6 +650,7 @@ class NpdClient:
 
         :return: Invoice - модель с информацией о счёте с чеком
         """
+
         if operation_time is None:
             operation_time = datetime.datetime.now().astimezone()
 
@@ -607,4 +661,6 @@ class NpdClient:
         response = await self.request(
             "POST", f"invoice/{invoice_id}/approve", json=payload
         )
-        return Invoice.model_validate(response)
+        result = Invoice.model_validate(response)
+        self._log("info", f"Чек на основе счёта ID: {invoice_id} успешно создан")
+        return result
