@@ -39,10 +39,9 @@ async def main():
         await client.auth()
         
         # Создаем новый чек
-        receipt = await client.create_ticket(
+        receipt = await client.create_check(
             name="Консультационные услуги",
             amount=1500,
-            quantity=1
         )
         
         checks = await client.get_checks(limit=5)
