@@ -355,7 +355,7 @@ class NpdClient:
 
         response = await self.request("POST", "income", json=payload)
         result = Income.model_validate(response)
-        self._log("info", f"Чек успешно создан, ID: {result.receipt_id}")
+        self._log("info", f"Чек успешно создан, ID: {result.approved_receipt_uuid}")
         return result
 
     async def cancel_check(
