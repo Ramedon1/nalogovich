@@ -40,11 +40,13 @@ class NpdClient:
         inn: str,
         password: str,
         enable_logging: bool = False,
+        proxy: str | None = None,
     ):
         self.base_url = "https://lknpd.nalog.ru/api/v1/"
         self.inn = inn
         self.password = password
         self.enable_logging = enable_logging
+        self.proxy = proxy
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
             "Content-Type": "application/json",
@@ -94,6 +96,10 @@ class NpdClient:
 
     async def request(self, method: str, endpoint: str, **kwargs) -> Any:
         session = await self.get_session()
+        
+        if self.proxy and "proxy" not in kwargs:
+            kwargs["proxy"] = self.proxy
+            
         try:
             async with session.request(
                 method, self.base_url + endpoint, **kwargs
@@ -128,8 +134,12 @@ class NpdClient:
 
         session = await self.get_session()
         try:
+            kwargs = {}
+            if self.proxy:
+                kwargs["proxy"] = self.proxy
+
             async with session.request(
-                "POST", self.base_url + "auth/lkfl", json=payload
+                "POST", self.base_url + "auth/lkfl", json=payload, **kwargs
             ) as response:
                 response_data = None
                 if "application/json" in response.headers.get("Content-Type", ""):
@@ -206,8 +216,12 @@ class NpdClient:
 
         session = await self.get_session()
         try:
+            kwargs = {}
+            if self.proxy:
+                kwargs["proxy"] = self.proxy
+
             async with session.request(
-                "POST", self.base_url + "auth/token", json=payload
+                "POST", self.base_url + "auth/token", json=payload, **kwargs
             ) as response:
                 response_data = None
                 if "application/json" in response.headers.get("Content-Type", ""):

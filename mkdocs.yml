@@ -114,10 +114,10 @@ nav:
     - Авторизация: guide/authentication.md
     - Работа с чеками: guide/checks.md
     - Работа со счетами: guide/invoices.md
+    - Использование прокси: guide/proxy.md
 
   - Техническая документация API:
     - Клиент: api/client.md
     - Модели данных: api/models.md
     - Перечисления: api/enums.md
     - Исключения: api/exceptions.md
-
