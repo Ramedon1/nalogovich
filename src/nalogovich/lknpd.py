@@ -96,10 +96,10 @@ class NpdClient:
 
     async def request(self, method: str, endpoint: str, **kwargs) -> Any:
         session = await self.get_session()
-        
+
         if self.proxy and "proxy" not in kwargs:
             kwargs["proxy"] = self.proxy
-            
+
         try:
             async with session.request(
                 method, self.base_url + endpoint, **kwargs
