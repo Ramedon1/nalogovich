@@ -310,7 +310,7 @@ result = await client.cancel_check(
 ## Обработка ошибок
 
 ```python
-from nalogovich.exeptions import ValidationError, ApiError
+from nalogovich.exceptions import ValidationError, ApiError
 
 async def create_check_with_error_handling():
     try:

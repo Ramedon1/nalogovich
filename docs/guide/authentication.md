@@ -68,7 +68,7 @@ async def auto_refresh_example():
 
 ```python
 from nalogovich.lknpd import NpdClient
-from nalogovich.exeptions import AuthenticationError, ApiError
+from nalogovich.exceptions import AuthenticationError, ApiError
 
 async def handle_auth_errors():
     try:

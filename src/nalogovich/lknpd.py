@@ -16,7 +16,7 @@ from nalogovich.enums import (
     InvoiceClientType,
     InvoiceStatus,
 )
-from nalogovich.exeptions import ValidationError, AuthenticationError, ApiError
+from nalogovich.exceptions import ValidationError, AuthenticationError, ApiError
 from nalogovich.models.operations import (
     ServiceCheck,
     OperationResponse,

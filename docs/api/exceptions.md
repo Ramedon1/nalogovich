@@ -2,13 +2,20 @@
 
 Nalogovich использует собственные исключения для обработки ошибок.
 
+!!! warning "Переименование модуля"
+    Модуль `nalogovich.exeptions` был переименован в `nalogovich.exceptions`
+    (исправлена опечатка в названии). Старый путь импорта
+    `from nalogovich.exeptions import ...` пока продолжает работать, но считается
+    устаревшим, выдаёт `DeprecationWarning` и будет удалён в одной из будущих
+    версий. Используйте `from nalogovich.exceptions import ...`.
+
 ---
 
 ## NPDError
 
 Базовое исключение для всех ошибок библиотеки.
 
-::: nalogovich.exeptions.NPDError
+::: nalogovich.exceptions.NPDError
     options:
       show_root_heading: false
       heading_level: 4
@@ -17,7 +24,7 @@ Nalogovich использует собственные исключения дл
 **Использование:**
 
 ```python
-from nalogovich.exeptions import NPDError
+from nalogovich.exceptions import NPDError
 
 try:
     # Ваш код
@@ -32,7 +39,7 @@ except NPDError as e:
 
 Ошибка валидации входных данных перед отправкой на сервер.
 
-::: nalogovich.exeptions.ValidationError
+::: nalogovich.exceptions.ValidationError
     options:
       show_root_heading: false
       heading_level: 4
@@ -47,7 +54,7 @@ except NPDError as e:
 **Пример:**
 
 ```python
-from nalogovich.exeptions import ValidationError
+from nalogovich.exceptions import ValidationError
 
 try:
     # Не указано ни name/amount, ни services
@@ -81,7 +88,7 @@ except ValidationError as e:
 
 Ошибка, возвращённая сервером API ФНС.
 
-::: nalogovich.exeptions.ApiError
+::: nalogovich.exceptions.ApiError
     options:
       show_root_heading: false
       heading_level: 4
@@ -96,7 +103,7 @@ except ValidationError as e:
 **Пример обработки:**
 
 ```python
-from nalogovich.exeptions import ApiError
+from nalogovich.exceptions import ApiError
 
 try:
     checks = await client.get_checks()
@@ -117,7 +124,7 @@ except ApiError as e:
 
 Ошибка авторизации.
 
-::: nalogovich.exeptions.AuthenticationError
+::: nalogovich.exceptions.AuthenticationError
     options:
       show_root_heading: false
       heading_level: 4
@@ -138,7 +145,7 @@ except ApiError as e:
 **Пример обработки:**
 
 ```python
-from nalogovich.exeptions import AuthenticationError
+from nalogovich.exceptions import AuthenticationError
 
 try:
     await client.auth()
