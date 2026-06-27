@@ -96,7 +96,7 @@ async def filter_checks():
 
 ```python
 from nalogovich.lknpd import NpdClient
-from nalogovich.exeptions import AuthenticationError, ApiError, ValidationError
+from nalogovich.exceptions import AuthenticationError, ApiError, ValidationError
 
 async def safe_request():
     try:
