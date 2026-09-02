@@ -32,11 +32,11 @@ class PaymentType(str, enum.Enum):
     """
     Типы оплаты
     CASH: Наличный расчет / Карта
-    ACCOUNT: Безналичный расчет (на счет)
+    WIRE: Безналичный расчет (на счет)
     """
 
     CASH = "CASH"
-    ACCOUNT = "ACCOUNT"
+    WIRE = "WIRE"
 
 
 class InvoiceStatus(str, enum.Enum):

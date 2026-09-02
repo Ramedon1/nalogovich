@@ -15,13 +15,13 @@ from nalogovich.enums import PaymentType
 async def create_simple_check():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         income = await client.create_check(
             name="Консультация по программированию",
             amount=5000.00,
             payment_type=PaymentType.CASH
         )
-        
+
         print(f"✅ Чек создан: {income.approved_receipt_uuid}")
 ```
 
@@ -36,19 +36,19 @@ from nalogovich.enums import PaymentType
 async def create_multi_item_check():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Создаём список позиций
         services = [
             ServiceCheck(name="Разработка сайта", amount=30000.00, quantity=1),
             ServiceCheck(name="Настройка сервера", amount=10000.00, quantity=1),
             ServiceCheck(name="Техническая поддержка", amount=5000.00, quantity=2),
         ]
-        
+
         income = await client.create_check(
             services=services,
             payment_type=PaymentType.CASH
         )
-        
+
         print(f"✅ Чек на {sum(s.amount * s.quantity for s in services)} ₽ создан")
         print(f"UUID: {income.approved_receipt_uuid}")
 ```
@@ -64,16 +64,16 @@ async def create_multi_item_check():
 async def create_check_for_company():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         income = await client.create_check(
             name="Дизайн логотипа",
             amount=25000.00,
-            payment_type=PaymentType.ACCOUNT,  # Безналичная оплата
+            payment_type=PaymentType.WIRE,  # Безналичная оплата
             is_business=True,  # Услуга для бизнеса
             inn_of_organization="7743013902",  # ИНН организации
             name_of_organization="ООО Ромашка"  # Название организации
         )
-        
+
         print(f"✅ Чек для юр. лица создан")
 ```
 
@@ -86,15 +86,15 @@ async def create_check_for_company():
 async def create_check_for_foreign():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         income = await client.create_check(
             name="Web development services",
             amount=100000.00,
-            payment_type=PaymentType.ACCOUNT,
+            payment_type=PaymentType.WIRE,
             is_foreign_organization=True,  # Иностранная организация
             name_of_organization="Foreign Company Ltd"
         )
-        
+
         print(f"✅ Чек для иностранной организации создан")
 ```
 
@@ -108,17 +108,17 @@ from datetime import datetime, timedelta
 async def create_check_with_date():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Дата продажи - вчера
         yesterday = datetime.now() - timedelta(days=1)
-        
+
         income = await client.create_check(
             name="Консультация",
             amount=3000.00,
             payment_type=PaymentType.CASH,
             date_of_sale=yesterday
         )
-        
+
         print(f"✅ Чек с датой {yesterday.date()} создан")
 ```
 
@@ -132,11 +132,11 @@ async def create_check_with_date():
 async def get_all_checks():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         response = await client.get_checks()
-        
+
         print(f"Найдено чеков: {len(response.content)}")
-        
+
         for check in response.content:
             print(f"\n{check.name}")
             print(f"  Сумма: {check.total_amount} ₽")
@@ -152,15 +152,15 @@ from datetime import datetime, timedelta
 async def get_checks_by_date():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Чеки за последние 7 дней
         week_ago = datetime.now() - timedelta(days=7)
-        
+
         response = await client.get_checks(
             from_date=week_ago,
             to_date=datetime.now()
         )
-        
+
         print(f"Чеков за неделю: {len(response.content)}")
 ```
 
@@ -172,12 +172,12 @@ from nalogovich.enums import SortBy
 async def get_sorted_checks():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Сортировка по сумме (сначала самые дорогие)
         response = await client.get_checks(
             sort_by=SortBy.total_amount_desc
         )
-        
+
         print("Топ-3 самых дорогих чека:")
         for check in response.content[:3]:
             print(f"{check.total_amount} ₽ — {check.name}")
@@ -198,12 +198,12 @@ from nalogovich.enums import ReceiptType
 async def get_active_checks():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Только действующие чеки
         response = await client.get_checks(
             receipt_type=ReceiptType.REGISTERED
         )
-        
+
         print(f"Действующих чеков: {len(response.content)}")
 ```
 
@@ -221,12 +221,12 @@ from nalogovich.enums import BuyerType
 async def get_checks_by_buyer():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # Только чеки от юр. лиц
         response = await client.get_checks(
             buyer_type=BuyerType.COMPANY
         )
-        
+
         print(f"Чеков от организаций: {len(response.content)}")
 ```
 
@@ -245,24 +245,24 @@ async def get_checks_by_buyer():
 async def get_checks_with_pagination():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         offset = 0
         limit = 50
         all_checks = []
-        
+
         while True:
             response = await client.get_checks(
                 offset=offset,
                 limit=limit
             )
-            
+
             all_checks.extend(response.content)
-            
+
             if not response.has_more:
                 break
-            
+
             offset += limit
-        
+
         print(f"Всего загружено чеков: {len(all_checks)}")
 ```
 
@@ -276,15 +276,15 @@ from nalogovich.enums import CommentReturn
 async def cancel_check():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         # UUID чека, который нужно аннулировать
         receipt_uuid = "200bzznrt0"
-        
+
         result = await client.cancel_check(
             receipt_uuid=receipt_uuid,
             comment=CommentReturn.wrong_receipt  # Чек сформирован ошибочно
         )
-        
+
         print(f"✅ Чек {receipt_uuid} аннулирован")
 ```
 
@@ -316,19 +316,19 @@ async def create_check_with_error_handling():
     try:
         async with NpdClient(inn="123456789012", password="your_password") as client:
             await client.auth()
-            
+
             income = await client.create_check(
                 name="Услуга",
                 amount=5000.00,
                 payment_type=PaymentType.CASH
             )
-            
+
             print(f"✅ Чек создан: {income.approved_receipt_uuid}")
-            
+
     except ValidationError as e:
         print(f"❌ Ошибка валидации: {e}")
         # Например, не указана сумма или название
-        
+
     except ApiError as e:
         print(f"❌ Ошибка API: {e}")
         print(f"Код: {e.status_code}")
@@ -345,10 +345,10 @@ from nalogovich.enums import PaymentType
 async def import_checks_from_csv():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         with open("incomes.csv", "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
-            
+
             for row in reader:
                 try:
                     income = await client.create_check(
@@ -357,7 +357,7 @@ async def import_checks_from_csv():
                         payment_type=PaymentType.CASH
                     )
                     print(f"✅ {row['service_name']}: {income.approved_receipt_uuid}")
-                    
+
                 except Exception as e:
                     print(f"❌ Ошибка при создании чека для {row['service_name']}: {e}")
 ```
@@ -368,12 +368,12 @@ async def import_checks_from_csv():
 async def calculate_statistics():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
+
         response = await client.get_checks()
-        
+
         total_income = sum(check.total_amount for check in response.content)
         avg_check = total_income / len(response.content) if response.content else 0
-        
+
         print(f"📊 Статистика за месяц:")
         print(f"  Всего чеков: {len(response.content)}")
         print(f"  Общий доход: {total_income:,.2f} ₽")
