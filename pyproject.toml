@@ -1,6 +1,6 @@
 [project]
 name = "nalogovich"
-version = "1.0.11"
+version = "1.0.12"
 description = "Wrapper for integration with the 'Мой налог' API service"
 readme = "README.md"
 authors = [
