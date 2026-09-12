@@ -7,6 +7,7 @@ __all__ = [
     "ValidationError",
     "ApiError",
     "AuthenticationError",
+    "EsiaAuthError",
 ]
 
 
@@ -38,3 +39,9 @@ class AuthenticationError(NPDError):
         super().__init__(message)
         self.status_code = status_code
         self.response_data = response_data
+
+
+class EsiaAuthError(AuthenticationError):
+    """Ошибка авторизации на портале Госуслуг (ЕСИА)"""
+
+    pass

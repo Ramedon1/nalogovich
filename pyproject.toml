@@ -28,6 +28,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+esia = [
+    "curl_cffi>=0.7.0",
+    "pyotp>=2.9.0",
+]
+totp = [
+    "pyotp>=2.9.0",
+]
 docs = [
     "mkdocs-material",
     "mkdocstrings[python]",
