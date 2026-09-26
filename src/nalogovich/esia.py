@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlparse, parse_qs
 
+import pyotp
+from curl_cffi.requests import AsyncSession
+
 from nalogovich.exceptions import EsiaAuthError, ValidationError
 
 __all__ = [
@@ -11,7 +14,6 @@ __all__ = [
     "ESIA_TOTP_URL",
     "LKNPD_REDIRECT_URL",
     "LKNPD_CALLBACK_URL",
-    "extract_query_param",
     "generate_totp",
     "esia_login",
 ]
@@ -30,19 +32,6 @@ LKNPD_CALLBACK_URL = (
 DEFAULT_IMPERSONATE = "chrome"
 
 
-def extract_query_param(url: str, name: str) -> str | None:
-    """
-    Достать значение query-параметра из URL.
-
-    :param url: Адрес, из которого берём параметр
-    :param name: Имя параметра
-
-    :return: Значение параметра или None, если его нет
-    """
-    values = parse_qs(urlparse(url).query).get(name)
-    return values[0] if values else None
-
-
 def generate_totp(secret: str) -> str:
     """
     Сгенерировать одноразовый код по секрету Госуслуг.
@@ -52,17 +41,10 @@ def generate_totp(secret: str) -> str:
 
     :param secret: Base32-секрет или otpauth-ссылка
 
-    :raises ValidationError: Если не установлен пакет pyotp или секрет невалиден
+    :raises ValidationError: Если секрет невалиден
 
     :return: Одноразовый код
     """
-    try:
-        import pyotp
-    except ImportError as e:
-        raise ValidationError(
-            "Для генерации TOTP-кода установите зависимость: pip install nalogovich[totp]"
-        ) from e
-
     secret = secret.strip()
 
     try:
@@ -71,28 +53,8 @@ def generate_totp(secret: str) -> str:
         else:
             otp = pyotp.TOTP(secret.replace(" ", "").upper())
         return otp.now()
-    except ValidationError:
-        raise
     except Exception as e:
         raise ValidationError(f"Некорректный TOTP-секрет: {e}") from e
-
-
-def _get_async_session():
-    """
-    Ленивый импорт curl_cffi.
-
-    :raises ValidationError: Если не установлен пакет curl_cffi
-
-    :return: Класс curl_cffi.requests.AsyncSession
-    """
-    try:
-        from curl_cffi.requests import AsyncSession
-    except ImportError as e:
-        raise ValidationError(
-            "Для входа через Госуслуги установите зависимость: pip install nalogovich[esia]"
-        ) from e
-
-    return AsyncSession
 
 
 def _parse_json(response: Any) -> Any:
@@ -140,13 +102,11 @@ async def esia_login(
     :param proxy: Прокси в формате ``http://user:pass@host:port``
     :param impersonate: Профиль браузера curl_cffi для TLS-отпечатка
 
-    :raises ValidationError: Если не установлен curl_cffi или нужен код 2ФА, но он не передан
+    :raises ValidationError: Если нужен код 2ФА, но он не передан
     :raises EsiaAuthError: При неверных учетных данных или неподдерживаемом способе подтверждения
 
     :return: Кортеж ``(code, state)`` для ``POST /api/v1/auth/esia``
     """
-    async_session = _get_async_session()
-
     headers = {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
@@ -160,7 +120,7 @@ async def esia_login(
     if proxy:
         session_kwargs["proxies"] = {"http": proxy, "https": proxy}
 
-    async with async_session(**session_kwargs) as session:
+    async with AsyncSession(**session_kwargs) as session:
         response = await session.get(auth_url, allow_redirects=True)
         if response.status_code >= 400:
             _raise_esia_error(
@@ -221,8 +181,9 @@ async def esia_login(
                 response_data=data,
             )
 
-    code = extract_query_param(redirect_url, "code")
-    state = extract_query_param(redirect_url, "state")
+    query = parse_qs(urlparse(redirect_url).query)
+    code = query.get("code", [None])[0]
+    state = query.get("state", [None])[0]
     if not code or not state:
         raise EsiaAuthError(
             "В ссылке возврата ЕСИА нет параметров code и state",

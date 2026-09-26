@@ -51,31 +51,6 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-Вход через Госуслуги (ЕСИА), если пароля от ЛК ФЛ нет:
-
-```bash
-pip install nalogovich[esia]
-```
-
-```python
-from nalogovich.lknpd import NpdClient
-
-async def main():
-    client = await NpdClient.from_esia(
-        login="79001234567",               # телефон, email или СНИЛС
-        password="пароль_от_госуслуг",
-        totp_secret="JBSWY3DPEHPK3PXP",  # секрет или строка otpauth:// из QR-кода
-    )
-
-    print(client.profile["displayName"])
-
-    # Токены можно сохранить и в следующий раз войти без пароля и кода
-    saved = client.export_session()
-    await client.close()
-
-    client = NpdClient.from_token(**saved)
-```
-
 ### С остальными примерами и методами можно ознакомиться в [документации](https://nalogovich.readthedocs.io/ru/latest/)
 
 ## Как получить пароль для использования Nalogovich

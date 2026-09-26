@@ -39,9 +39,7 @@ async def auth_example():
 async def auth_with_context():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
-        
-        # Ваш код здесь
-        # Сессия автоматически закроется при выходе из блока with
+
 ```
 
 !!! tip "Автоматическое закрытие сессии"
@@ -56,7 +54,6 @@ async def auto_refresh_example():
     async with NpdClient(inn="123456789012", password="your_password") as client:
         await client.auth()
         
-        # Первый запрос
         checks1 = await client.get_checks()
         
         # ... прошло много времени, токен истёк ...
@@ -70,42 +67,49 @@ async def auto_refresh_example():
 
 ## Обработка ошибок авторизации
 
-Различные типы ошибок при авторизации:
+`auth()` и запросы к ЛК НПД внутри `auth_esia()` выбрасывают `AuthenticationError`
+при HTTP 401, 403 и 422. Другие ошибки ответа и сетевые ошибки запросов к ЛК НПД
+выбрасываются как `ApiError`. Текст ответа сервера доступен в `response_data`.
+
+Ошибки входа на самом портале Госуслуг приходят как `EsiaAuthError`. Этот класс
+наследуется от `AuthenticationError`, поэтому его нужно перехватывать первым.
+Если для входа не передан обязательный одноразовый код, возникает `ValidationError`.
 
 ```python
 from nalogovich.lknpd import NpdClient
-from nalogovich.exceptions import AuthenticationError, ApiError
+from nalogovich.exceptions import (
+    ApiError,
+    AuthenticationError,
+    EsiaAuthError,
+    ValidationError,
+)
 
-async def handle_auth_errors():
+async def login_with_esia():
     try:
-        async with NpdClient(inn="123456789012", password="wrong_password") as client:
-            await client.auth()
-            
+        async with NpdClient() as client:
+            await client.auth_esia(
+                login="79001234567",
+                password="your_password",
+                totp_code="123456",
+            )
+            return client.profile
+
+    except EsiaAuthError as e:
+        print(f"Ошибка входа на Госуслугах: {e}")
     except AuthenticationError as e:
-        if e.status_code == 422:
-            print("❌ Неверный ИНН или пароль")
-        elif e.status_code == 401:
-            print("❌ Неавторизован. Проверьте учетные данные")
-        elif e.status_code == 403:
-            print("❌ Доступ запрещён. Возможно, аккаунт заблокирован")
-        else:
-            print(f"❌ Ошибка авторизации: {e}")
-        
-        # Дополнительная информация
-        print(f"Код ответа: {e.status_code}")
-        print(f"Данные ответа: {e.response_data}")
-        
+        print(f"ЛК НПД отклонил авторизацию (HTTP {e.status_code}): {e}")
+    except ValidationError as e:
+        print(f"Некорректные параметры входа: {e}")
     except ApiError as e:
-        print(f"❌ Ошибка API: {e}")
+        print(f"Ошибка запроса к ЛК НПД (HTTP {e.status_code}): {e}")
 ```
 
-### Типичные ошибки
+При входе по ИНН через `auth()` обработка такая же, кроме `EsiaAuthError` и
+`ValidationError`: их этот способ входа не использует. Смотрите сообщение
+исключения и `response_data`; один код HTTP 422 не всегда означает неверный пароль.
 
-| Код | Описание | Решение |
-|-----|----------|---------|
-| 422 | Неверный ИНН или пароль | Проверьте правильность учетных данных |
-| 401 | Неавторизован | Убедитесь, что пароль актуален |
-| 403 | Доступ запрещён | Проверьте статус аккаунта в ЛК НПД |
+Сетевые ошибки запросов непосредственно к ЕСИА пока не преобразуются библиотекой
+и могут приходить как исключения `curl_cffi`.
 
 ## Повторная авторизация вручную
 
@@ -124,33 +128,13 @@ async def manual_reauth():
         # Продолжаем работу с новым токеном
 ```
 
-## Проверка статуса авторизации
-
-```python
-async def check_auth_status():
-    client = NpdClient(inn="123456789012", password="your_password")
-    
-    # Проверяем наличие токена
-    if client.token is None:
-        print("⚠️ Не авторизован")
-        await client.auth()
-    else:
-        print("✅ Уже авторизован")
-    
-    await client.close()
-```
 
 ## Вход через Госуслуги (ЕСИА)
 
 Если пароля от ЛК ФЛ нет, можно войти через Госуслуги — тем же путём, что и веб-кабинет:
 библиотека запрашивает у ЛК НПД ссылку авторизации, проходит вход на `esia.gosuslugi.ru`
-и обменивает полученный код на токены ЛК НПД.
+и обменивает полученный код на токены ЛК НПД. Для этого типа авторизации обязательно нужно подкючить двухфакторную аутентификацию через приложение-аутентификатор (TOTP).
 
-Для этого нужна дополнительная зависимость:
-
-```bash
-pip install nalogovich[esia]
-```
 
 ```python
 from nalogovich.lknpd import NpdClient
@@ -165,42 +149,6 @@ async def esia_example():
     print(client.profile["displayName"], client.profile["inn"])
     await client.close()
 ```
-
-Тот же вход на уже созданном клиенте:
-
-```python
-async with NpdClient() as client:
-    await client.auth_esia(
-        login="79001234567",
-        password="пароль_от_госуслуг",
-        totp_secret="JBSWY3DPEHPK3PXP",
-    )
-```
-
-### Одноразовый код
-
-`totp_secret` принимает как чистый base32-секрет, так и целиком строку из QR-кода:
-
-```python
-totp_secret = "otpauth://totp/gosuslugi?secret=JBSWY3DPEHPK3PXP&issuer=gosuslugi"
-```
-
-Секрет показывается один раз — при подключении входа по одноразовому коду в настройках
-безопасности Госуслуг. Если секрета нет, можно передать уже сгенерированный код (живёт 30 секунд):
-
-```python
-await client.auth_esia(login=..., password=..., totp_code="123456")
-```
-
-!!! danger "Храните секреты вне кода"
-    Пароль Госуслуг и TOTP-секрет дают полный доступ к учётной записи. Держите их в
-    переменных окружения или менеджере секретов, не в исходниках и не в репозитории.
-
-!!! warning "Ошибки входа"
-    Проблемы на стороне Госуслуг приходят как `EsiaAuthError` (наследник
-    `AuthenticationError`) — в `response_data` лежит исходный ответ ЕСИА.
-    Если на аккаунте включён другой способ подтверждения (СМС, push), вход не пройдёт:
-    поддерживается только код из приложения-аутентификатора.
 
 ## Сохранение и восстановление сессии
 

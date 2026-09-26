@@ -22,19 +22,14 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "aiohttp>=3.9.0",
+    "curl_cffi>=0.7.0",
     "loguru>=0.7.3",
     "pydantic>=2.4.1",
+    "pyotp>=2.9.0",
     "python-dateutil>=2.9.0.post0",
 ]
 
 [project.optional-dependencies]
-esia = [
-    "curl_cffi>=0.7.0",
-    "pyotp>=2.9.0",
-]
-totp = [
-    "pyotp>=2.9.0",
-]
 docs = [
     "mkdocs-material",
     "mkdocstrings[python]",

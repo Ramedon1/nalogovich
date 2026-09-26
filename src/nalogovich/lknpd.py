@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import aiohttp
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 
@@ -20,9 +21,13 @@ from nalogovich.esia import (
     LKNPD_CALLBACK_URL,
     LKNPD_REDIRECT_URL,
     esia_login,
-    extract_query_param,
 )
-from nalogovich.exceptions import ValidationError, AuthenticationError, ApiError
+from nalogovich.exceptions import (
+    ValidationError,
+    AuthenticationError,
+    EsiaAuthError,
+    ApiError,
+)
 from nalogovich.models.operations import (
     ServiceCheck,
     OperationResponse,
@@ -68,7 +73,6 @@ class NpdClient:
         }
         self.token: str | None = None
         self.refresh_token: str | None = None
-        self.token_expire_in: str | None = None
         self.profile: dict[str, Any] | None = None
         self.session: aiohttp.ClientSession | None = None
 
@@ -97,8 +101,7 @@ class NpdClient:
             return
 
         self.token = token
-        self.refresh_token = response_data.get("refreshToken") or self.refresh_token
-        self.token_expire_in = response_data.get("tokenExpireIn")
+        self.refresh_token = response_data.get("refreshToken")
         if profile := response_data.get("profile"):
             self.profile = profile
             if not self.inn:
@@ -129,7 +132,7 @@ class NpdClient:
             message = response_data.get("message")
 
         if status == 422:
-            message = message or "Неверный ИНН или пароль"
+            message = message or f"{prefix}: HTTP 422"
             self._log("error", f"{prefix}: {message}")
             raise AuthenticationError(
                 message, status_code=422, response_data=response_data
@@ -279,16 +282,13 @@ class NpdClient:
         """
         Авторизация через Госуслуги (ЕСИА).
 
-        Требует установленной зависимости ``curl_cffi`` (``pip install nalogovich[esia]``),
-        а для генерации одноразового кода по секрету - ``pyotp`` (``nalogovich[totp]``).
-
         :param login: Логин Госуслуг (телефон, email или СНИЛС)
         :param password: Пароль Госуслуг
         :param totp_secret: Base32-секрет из приложения-аутентификатора
         :param totp_code: Готовый одноразовый код (приоритетнее, чем totp_secret)
         :param impersonate: Профиль браузера curl_cffi для TLS-отпечатка
 
-        :raises ValidationError: Если не установлены зависимости или не передан код 2ФА
+        :raises ValidationError: Если не передан код 2ФА
         :raises EsiaAuthError: При ошибке авторизации на стороне Госуслуг
         :raises ApiError: При других ошибках API
 
@@ -322,11 +322,10 @@ class NpdClient:
             impersonate=impersonate,
         )
 
-        expected_state = extract_query_param(auth_url, "state")
+        expected_state = parse_qs(urlparse(auth_url).query).get("state", [None])[0]
         if expected_state and expected_state != state:
-            self._log(
-                "warning",
-                "State в ответе ЕСИА не совпадает с исходным, используем полученный",
+            raise EsiaAuthError(
+                "State в ответе ЕСИА не совпадает с исходным",
             )
 
         payload = {
@@ -407,6 +406,7 @@ class NpdClient:
         password: str,
         totp_secret: str | None = None,
         totp_code: str | None = None,
+        impersonate: str = "chrome",
         **kwargs: Any,
     ) -> "NpdClient":
         """
@@ -416,6 +416,7 @@ class NpdClient:
         :param password: Пароль Госуслуг
         :param totp_secret: Base32-секрет из приложения-аутентификатора
         :param totp_code: Готовый одноразовый код
+        :param impersonate: Профиль браузера curl_cffi для TLS-отпечатка
         :param kwargs: Остальные параметры конструктора (proxy, enable_logging, ...)
 
         :return: Авторизованный клиент
@@ -427,6 +428,7 @@ class NpdClient:
                 password=password,
                 totp_secret=totp_secret,
                 totp_code=totp_code,
+                impersonate=impersonate,
             )
         except Exception:
             await client.close()
