@@ -34,6 +34,11 @@ async with NpdClient(inn="ваш_инн", password="ваш_пароль") as cli
 
 ### 🔐 Авторизация
 - [`auth()`](#nalogovich.lknpd.NpdClient.auth) — авторизация через ЛК ФЛ
+- [`auth_esia()`](#nalogovich.lknpd.NpdClient.auth_esia) — авторизация через Госуслуги (ЕСИА)
+- [`from_esia()`](#nalogovich.lknpd.NpdClient.from_esia) — создать клиент и сразу войти через Госуслуги
+- [`from_token()`](#nalogovich.lknpd.NpdClient.from_token) — восстановить сессию из сохранённых токенов
+- [`auth_with_token()`](#nalogovich.lknpd.NpdClient.auth_with_token) — подставить токены в существующий клиент
+- [`export_session()`](#nalogovich.lknpd.NpdClient.export_session) — выгрузить токены для повторного входа
 - [`re_auth()`](#nalogovich.lknpd.NpdClient.re_auth) — обновление токена
 
 ### 🧾 Работа с чеками

@@ -138,9 +138,12 @@ except ApiError as e:
 
 **Когда возникает:**
 
-- Неверный ИНН или пароль (422)
-- Неавторизован (401)
-- Доступ запрещён (403)
+- ЛК НПД вернул HTTP 401, 403 или 422 при авторизации
+- Не заданы ИНН и пароль для `auth()`
+
+`EsiaAuthError` наследуется от `AuthenticationError`. При обработке входа через ЕСИА
+перехватывайте `EsiaAuthError` раньше этого базового класса. Причину ответа HTTP 422
+смотрите в тексте ошибки и `response_data`.
 
 **Пример обработки:**
 
@@ -150,12 +153,45 @@ from nalogovich.exceptions import AuthenticationError
 try:
     await client.auth()
 except AuthenticationError as e:
-    if e.status_code == 422:
-        print("❌ Неверный ИНН или пароль")
-    elif e.status_code == 401:
-        print("❌ Неавторизован. Проверьте учетные данные")
-    elif e.status_code == 403:
-        print("❌ Доступ запрещён. Возможно, аккаунт заблокирован")
-    
-    print(f"Детали: {e.response_data}")
+    print(f"Ошибка авторизации (HTTP {e.status_code}): {e}")
+    if e.response_data is not None:
+        print(f"Детали: {e.response_data}")
+```
+
+---
+
+## EsiaAuthError
+
+Ошибка авторизации на портале Госуслуг (ЕСИА). Наследуется от `AuthenticationError`,
+поэтому существующий `except AuthenticationError` продолжает её ловить.
+
+::: nalogovich.exceptions.EsiaAuthError
+    options:
+      show_root_heading: false
+      heading_level: 4
+      docstring_section_style: list
+
+**Когда возникает:**
+
+- Неверный логин или пароль Госуслуг
+- Неверный или просроченный одноразовый код
+- На аккаунте включён неподдерживаемый способ подтверждения (СМС, push)
+- ЕСИА потребовала дополнительное действие (капча, подтверждение входа)
+
+**Пример обработки:**
+
+```python
+from nalogovich.exceptions import EsiaAuthError
+from nalogovich.lknpd import NpdClient
+
+try:
+    client = await NpdClient.from_esia(
+        login="79001234567",
+        password="пароль_от_госуслуг",
+        totp_secret="JBSWY3DPEHPK3PXP",
+    )
+except EsiaAuthError as e:
+    print(f"❌ Госуслуги не пустили: {e}")
+    print(f"HTTP код: {e.status_code}")
+    print(f"Ответ ЕСИА: {e.response_data}")
 ```

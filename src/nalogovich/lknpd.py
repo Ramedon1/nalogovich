@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import aiohttp
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 from dateutil.relativedelta import relativedelta
 from loguru import logger
 
@@ -16,7 +17,17 @@ from nalogovich.enums import (
     InvoiceClientType,
     InvoiceStatus,
 )
-from nalogovich.exceptions import ValidationError, AuthenticationError, ApiError
+from nalogovich.esia import (
+    LKNPD_CALLBACK_URL,
+    LKNPD_REDIRECT_URL,
+    esia_login,
+)
+from nalogovich.exceptions import (
+    ValidationError,
+    AuthenticationError,
+    EsiaAuthError,
+    ApiError,
+)
 from nalogovich.models.operations import (
     ServiceCheck,
     OperationResponse,
@@ -37,10 +48,11 @@ from nalogovich.utils.validators import (
 class NpdClient:
     def __init__(
         self,
-        inn: str,
-        password: str,
+        inn: str | None = None,
+        password: str | None = None,
         enable_logging: bool = False,
         proxy: str | None = None,
+        source_device_id: str | None = None,
     ):
         self.base_url = "https://lknpd.nalog.ru/api/v1/"
         self.inn = inn
@@ -52,7 +64,7 @@ class NpdClient:
             "Content-Type": "application/json",
         }
         self.device_info = {
-            "sourceDeviceId": "-YWmoFV_Tw8ATGRD8Zym3",
+            "sourceDeviceId": source_device_id or "-YWmoFV_Tw8ATGRD8Zym3",
             "sourceType": "WEB",
             "appVersion": "1.0.0",
             "metaDetails": {
@@ -61,6 +73,7 @@ class NpdClient:
         }
         self.token: str | None = None
         self.refresh_token: str | None = None
+        self.profile: dict[str, Any] | None = None
         self.session: aiohttp.ClientSession | None = None
 
         if self.enable_logging:
@@ -73,6 +86,109 @@ class NpdClient:
         if self.enable_logging:
             log_func = getattr(logger.opt(depth=1), level)
             log_func(f"[nalogovich] {message}", **kwargs)
+
+    def _apply_token(self, response_data: Any) -> None:
+        """
+        Сохранить токены из ответа авторизации и проставить заголовок Authorization.
+
+        :param response_data: Тело ответа ручки авторизации
+        """
+        if not isinstance(response_data, dict):
+            return
+
+        token = response_data.get("token")
+        if not token:
+            return
+
+        self.token = token
+        self.refresh_token = response_data.get("refreshToken")
+        if profile := response_data.get("profile"):
+            self.profile = profile
+            if not self.inn:
+                self.inn = profile.get("inn")
+
+        self.headers["Authorization"] = f"Bearer {token}"
+        if self.session and not self.session.closed:
+            self.session.headers.update({"Authorization": f"Bearer {token}"})
+
+    def _raise_for_auth_status(
+        self, status: int, response_data: Any, prefix: str = "Ошибка авторизации"
+    ) -> None:
+        """
+        Превратить HTTP-статус ручки авторизации в исключение библиотеки.
+
+        :param status: HTTP-статус ответа
+        :param response_data: Тело ответа (если это был JSON)
+        :param prefix: Префикс для сообщения об ошибке
+
+        :raises AuthenticationError: При 401, 403 и 422
+        :raises ApiError: При остальных статусах >= 400
+        """
+        if status < 400:
+            return
+
+        message = None
+        if isinstance(response_data, dict):
+            message = response_data.get("message")
+
+        if status == 422:
+            message = message or f"{prefix}: HTTP 422"
+            self._log("error", f"{prefix}: {message}")
+            raise AuthenticationError(
+                message, status_code=422, response_data=response_data
+            )
+
+        if status == 401:
+            message = message or "Неавторизован. Проверьте учетные данные."
+            self._log("error", f"{prefix}: Неавторизован")
+            raise AuthenticationError(
+                message, status_code=401, response_data=response_data
+            )
+
+        if status == 403:
+            message = message or "Доступ запрещен. Возможно, аккаунт заблокирован."
+            self._log("error", f"{prefix}: Доступ запрещен")
+            raise AuthenticationError(
+                message, status_code=403, response_data=response_data
+            )
+
+        message = message or f"{prefix}: HTTP {status}"
+        self._log("error", message)
+        raise ApiError(message, status_code=status, response_data=response_data)
+
+    async def _post_auth(self, endpoint: str, payload: dict, prefix: str) -> Any:
+        """
+        Выполнить запрос к ручке авторизации и разобрать ответ.
+
+        :param endpoint: Эндпоинт относительно base_url
+        :param payload: Тело запроса
+        :param prefix: Префикс для сообщений об ошибках
+
+        :raises AuthenticationError: При ошибке учетных данных
+        :raises ApiError: При сетевой ошибке или ошибке API
+
+        :return: Тело ответа
+        """
+        session = await self.get_session()
+
+        kwargs = {}
+        if self.proxy:
+            kwargs["proxy"] = self.proxy
+
+        try:
+            async with session.request(
+                "POST", self.base_url + endpoint, json=payload, **kwargs
+            ) as response:
+                response_data = None
+                if "application/json" in response.headers.get("Content-Type", ""):
+                    response_data = await response.json()
+
+                self._raise_for_auth_status(response.status, response_data, prefix)
+                return response_data
+
+        except aiohttp.ClientError as e:
+            self._log("error", f"Ошибка сети при авторизации: {e}")
+            raise ApiError(f"Ошибка сети при авторизации: {e}", status_code=0)
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self.session is None or self.session.closed:
@@ -100,6 +216,13 @@ class NpdClient:
         if self.proxy and "proxy" not in kwargs:
             kwargs["proxy"] = self.proxy
 
+        if isinstance(kwargs.get("params"), dict):
+            kwargs["params"] = {
+                key: value
+                for key, value in kwargs["params"].items()
+                if value is not None
+            }
+
         try:
             async with session.request(
                 method, self.base_url + endpoint, **kwargs
@@ -124,7 +247,15 @@ class NpdClient:
 
         :raises AuthenticationError: При неверных учетных данных или других ошибках авторизации
         :raises ApiError: При других ошибках API
+
+        :return: Ответ ручки авторизации с токенами и профилем
         """
+
+        if not self.inn or not self.password:
+            raise AuthenticationError(
+                "Не заданы ИНН и пароль. Используйте auth_esia(), from_token() "
+                "или создайте клиент с inn и password."
+            )
 
         payload = {
             "username": self.inn,
@@ -132,70 +263,177 @@ class NpdClient:
             "deviceInfo": self.device_info,
         }
 
-        session = await self.get_session()
+        response_data = await self._post_auth(
+            "auth/lkfl", payload, "Ошибка авторизации"
+        )
+        self._apply_token(response_data)
+        if self.token:
+            self._log("info", "Авторизация успешно завершена")
+        return response_data
+
+    async def auth_esia(
+        self,
+        login: str,
+        password: str,
+        totp_secret: str | None = None,
+        totp_code: str | None = None,
+        impersonate: str = "chrome",
+    ):
+        """
+        Авторизация через Госуслуги (ЕСИА).
+
+        :param login: Логин Госуслуг (телефон, email или СНИЛС)
+        :param password: Пароль Госуслуг
+        :param totp_secret: Base32-секрет из приложения-аутентификатора
+        :param totp_code: Готовый одноразовый код (приоритетнее, чем totp_secret)
+        :param impersonate: Профиль браузера curl_cffi для TLS-отпечатка
+
+        :raises ValidationError: Если не передан код 2ФА
+        :raises EsiaAuthError: При ошибке авторизации на стороне Госуслуг
+        :raises ApiError: При других ошибках API
+
+        :return: Ответ ручки авторизации с токенами и профилем
+        """
+
+        self._log("info", "Авторизация через Госуслуги (ЕСИА)")
+
+        url_response = await self._post_auth(
+            "auth/esia/url",
+            {"redirectUrl": LKNPD_REDIRECT_URL},
+            "Ошибка получения ссылки ЕСИА",
+        )
+
+        auth_url = (url_response or {}).get("url")
+        if not auth_url:
+            raise ApiError(
+                "ЛК НПД не вернул ссылку авторизации ЕСИА",
+                status_code=0,
+                response_data=url_response,
+            )
+
+        code, state = await esia_login(
+            auth_url=auth_url,
+            login=login,
+            password=password,
+            totp_secret=totp_secret,
+            totp_code=totp_code,
+            user_agent=self.headers.get("User-Agent"),
+            proxy=self.proxy,
+            impersonate=impersonate,
+        )
+
+        expected_state = parse_qs(urlparse(auth_url).query).get("state", [None])[0]
+        if expected_state and expected_state != state:
+            raise EsiaAuthError(
+                "State в ответе ЕСИА не совпадает с исходным",
+            )
+
+        payload = {
+            "redirectUrl": LKNPD_CALLBACK_URL,
+            "code": code,
+            "state": state,
+            "deviceInfo": self.device_info,
+        }
+
+        response_data = await self._post_auth(
+            "auth/esia", payload, "Ошибка авторизации через ЕСИА"
+        )
+        self._apply_token(response_data)
+        if self.token:
+            self._log("info", "Авторизация через Госуслуги успешно завершена")
+        return response_data
+
+    async def auth_with_token(
+        self,
+        token: str,
+        refresh_token: str | None = None,
+        verify: bool = False,
+    ):
+        """
+        Восстановить ранее полученную сессию из сохраненных токенов.
+
+        :param token: Токен доступа (живёт около часа)
+        :param refresh_token: Токен обновления, нужен для автоматического продления сессии
+        :param verify: Проверить токен запросом к API (при истечении сработает re_auth)
+
+        :raises AuthenticationError: Если токен протух, а refresh_token не передан
+        :raises ApiError: При других ошибках API
+        """
+        self._apply_token({"token": token, "refreshToken": refresh_token})
+        self._log("info", "Сессия восстановлена из сохранённого токена")
+
+        if verify:
+            self.profile = await self.request("GET", "taxpayer")
+
+    def export_session(self) -> dict[str, Any]:
+        """
+        Выгрузить текущую сессию для последующего восстановления через from_token().
+
+        :return: Словарь с токенами и идентификатором устройства
+        """
+        return {
+            "token": self.token,
+            "refresh_token": self.refresh_token,
+            "source_device_id": self.device_info["sourceDeviceId"],
+        }
+
+    @classmethod
+    def from_token(
+        cls,
+        token: str,
+        refresh_token: str | None = None,
+        source_device_id: str | None = None,
+        **kwargs: Any,
+    ) -> "NpdClient":
+        """
+        Создать клиент из сохранённых токенов, без повторной авторизации.
+
+        :param token: Токен доступа
+        :param refresh_token: Токен обновления
+        :param source_device_id: Идентификатор устройства из export_session()
+        :param kwargs: Остальные параметры конструктора (proxy, enable_logging, inn, ...)
+
+        :return: Готовый к работе клиент
+        """
+        client = cls(source_device_id=source_device_id, **kwargs)
+        client._apply_token({"token": token, "refreshToken": refresh_token})
+        return client
+
+    @classmethod
+    async def from_esia(
+        cls,
+        login: str,
+        password: str,
+        totp_secret: str | None = None,
+        totp_code: str | None = None,
+        impersonate: str = "chrome",
+        **kwargs: Any,
+    ) -> "NpdClient":
+        """
+        Создать клиент и сразу авторизоваться через Госуслуги (ЕСИА).
+
+        :param login: Логин Госуслуг (телефон, email или СНИЛС)
+        :param password: Пароль Госуслуг
+        :param totp_secret: Base32-секрет из приложения-аутентификатора
+        :param totp_code: Готовый одноразовый код
+        :param impersonate: Профиль браузера curl_cffi для TLS-отпечатка
+        :param kwargs: Остальные параметры конструктора (proxy, enable_logging, ...)
+
+        :return: Авторизованный клиент
+        """
+        client = cls(**kwargs)
         try:
-            kwargs = {}
-            if self.proxy:
-                kwargs["proxy"] = self.proxy
-
-            async with session.request(
-                "POST", self.base_url + "auth/lkfl", json=payload, **kwargs
-            ) as response:
-                response_data = None
-                if "application/json" in response.headers.get("Content-Type", ""):
-                    response_data = await response.json()
-
-                if response.status == 422:
-                    error_message = "Неверный ИНН или пароль"
-                    if response_data:
-                        error_message = response_data.get("message", error_message)
-                    self._log("error", f"Ошибка авторизации: {error_message}")
-                    raise AuthenticationError(
-                        error_message, status_code=422, response_data=response_data
-                    )
-
-                if response.status == 401:
-                    self._log("error", "Ошибка авторизации: Неавторизован")
-                    raise AuthenticationError(
-                        "Неавторизован. Проверьте учетные данные.",
-                        status_code=401,
-                        response_data=response_data,
-                    )
-
-                if response.status == 403:
-                    self._log("error", "Ошибка авторизации: Доступ запрещен")
-                    raise AuthenticationError(
-                        "Доступ запрещен. Возможно, аккаунт заблокирован.",
-                        status_code=403,
-                        response_data=response_data,
-                    )
-
-                if response.status >= 400:
-                    error_message = f"Ошибка авторизации: HTTP {response.status}"
-                    if response_data and isinstance(response_data, dict):
-                        error_message = response_data.get("message", error_message)
-                    self._log("error", error_message)
-                    raise ApiError(
-                        error_message,
-                        status_code=response.status,
-                        response_data=response_data,
-                    )
-
-                if token := response_data.get("token"):
-                    self.token = token
-                    self.refresh_token = response_data.get("refreshToken")
-                    self.headers["Authorization"] = f"Bearer {token}"
-                    if self.session and not self.session.closed:
-                        self.session.headers.update(
-                            {"Authorization": f"Bearer {token}"}
-                        )
-                    self._log("info", "Авторизация успешно завершена")
-
-                return response_data
-
-        except aiohttp.ClientError as e:
-            self._log("error", f"Ошибка сети при авторизации: {e}")
-            raise ApiError(f"Ошибка сети при авторизации: {e}", status_code=0)
+            await client.auth_esia(
+                login=login,
+                password=password,
+                totp_secret=totp_secret,
+                totp_code=totp_code,
+                impersonate=impersonate,
+            )
+        except Exception:
+            await client.close()
+            raise
+        return client
 
     async def re_auth(self):
         """
@@ -231,25 +469,12 @@ class NpdClient:
                     self.refresh_token = None
                     return await self.auth()
 
-                if response.status >= 400:
-                    error_message = f"Ошибка обновления токена: HTTP {response.status}"
-                    if response_data and isinstance(response_data, dict):
-                        error_message = response_data.get("message", error_message)
-                    self._log("error", error_message)
-                    raise ApiError(
-                        error_message,
-                        status_code=response.status,
-                        response_data=response_data,
-                    )
+                self._raise_for_auth_status(
+                    response.status, response_data, "Ошибка обновления токена"
+                )
 
-                if token := response_data.get("token"):
-                    self.token = token
-                    self.refresh_token = response_data.get("refreshToken")
-                    self.headers["Authorization"] = f"Bearer {token}"
-                    if self.session and not self.session.closed:
-                        self.session.headers.update(
-                            {"Authorization": f"Bearer {token}"}
-                        )
+                self._apply_token(response_data)
+                if self.token:
                     self._log("info", "Токен успешно обновлен")
 
                 return response_data
@@ -301,7 +526,10 @@ class NpdClient:
 
         response = await self.request("GET", "incomes", params=params)
         result = OperationResponse.model_validate(response)
-        self._log("info", f"Получено чеков: {len(result.items)} из {result.total}")
+        self._log(
+            "info",
+            f"Получено чеков: {len(result.content)}, есть ещё: {result.has_more}",
+        )
         return result
 
     async def create_check(
@@ -561,7 +789,10 @@ class NpdClient:
 
         response = await self.request("POST", "invoice/table", json=payload)
         result = InvoiceResponse.model_validate(response)
-        self._log("info", f"Получено счетов: {len(result.data)} из {result.total}")
+        self._log(
+            "info",
+            f"Получено счетов: {len(result.items)}, есть ещё: {result.has_more}",
+        )
         return result
 
     async def get_payment_types(
